@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Prueba de WebSocket</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        #log {
+            background: #f4f4f4;
+            padding: 10px;
+            height: 200px;
+            overflow-y: scroll;
+            margin-top: 10px;
+        }
+
+        .btn-close-socket {
+            background-color: red;
+            color: white;
+            border-radius: 5px;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Mi primer WebSocket</h2>
+
+    <input type="text" id="mensajeInput" oninput="enviarMensaje()" placeholder="Escribe un mensaje aquí...">
+    <button onclick="enviarMensaje()">Enviar al Servidor</button>
+    <button onclick="cerrarConexion()" class="btn-close-socket">Desconectar</button>
+
+    <div id="log"></div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        let socket = null;
+
+        function log(texto, color) {
+            logDiv.innerHTML += `<div style="color: ${color}">${texto}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight; // Auto-scroll
+        }
+
+        // 1. Centralizamos la conexión
+        function conectarSocket() {
+            // Evitamos reconectar si ya estamos conectados o intentando conectar
+            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+
+            log("⏳ Intentando conectar...", "orange");
+            socket = new WebSocket('ws://localhost:8765');
+
+            socket.onopen = function (e) {
+                log("🟢 Conectado al servidor Python", "green");
+                document.getElementById('mensajeInput').disabled = false;
+            };
+
+            socket.onerror = function (error) {
+                log("🔴 Error en la conexion", "red");
+            };
+
+            socket.onmessage = function (event) {
+                // Parseamos el JSON que viene desde Python
+                try {
+                    const {data} = event;
+                    console.log(event);
+                    let matches = JSON.parse(event.data).predictions.map(p => p.word);
+                    
+                    log(`📥 Predicciones: ${matches.join(" | ")}`, "blue");
+                } catch (e) {
+                    log(`📥 Catch Servidor dice: ${event.data}`, "blue");
+                }
+            };
+
+            socket.onclose = function (event) {
+                log("🔴 Desconectado del servidor", "red");
+                socket = null; // Liberamos la variable preventivamente
+                document.getElementById('mensajeInput').disabled = true;
+            };
+        }
+
+        // Conectar automáticamente al entrar
+        conectarSocket();
+
+        // Función atada al botón enviar
+        function enviarMensaje() {
+            // Validacion Senior: Evita que el programa explote si presionan el botón sin conexión
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                log("⚠️ No hay conexión activa. Intentando reconectar...", "orange");
+                conectarSocket();
+                return; // Cortamos la función aquí, NO enviamos el mensaje
+            }
+
+            const input = document.getElementById('mensajeInput');
+            const texto = input.value;
+
+            if (texto.trim() === "") return; // No enviar vacío
+
+            // Enviamos el mensaje POR EL TÚNEL
+            socket.send(texto);
+            log(`📤 Tú enviaste: ${texto}`, "black");
+        }
+
+        // Función atada al botón desconectar
+        function cerrarConexion() {
+            // Validamos que exista antes de intentar llamar a un método
+            if (socket) {
+                socket.close();
+                // No hace falta poner socket=null aquí porque el evento 'onclose' lo hará
+            } else {
+                log("⚠️ Ya estabas desconectado", "orange");
+            }
+        }
+    </script>
+</body>
+
+</html>
